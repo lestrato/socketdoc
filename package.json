@@ -1,0 +1,15 @@
+{
+  "name": "socket-chat-example",
+  "version": "0.0.1",
+  "description": "my first socket.io app",
+  "dependencies": {
+    "bootstrap": "^3.3.7",
+    "codemirror-spell-checker": "^1.1.2",
+    "express": "^4.15.4",
+    "marked": "^0.3.6",
+    "pug": "^2.0.0-rc.4",
+    "simplemde": "^1.11.2",
+    "socket.io": "^2.0.3",
+    "xmlhttprequest": "^1.8.0"
+  }
+}

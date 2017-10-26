@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 13px Helvetica, Arial; }
+      #is_typing_container { padding: 5px; position: fixed; bottom: 50px; width: 100%; }
+      form { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
+      #m { border: 0; padding: 10px; width: 80%; margin-right: .5%; }
+      #n { border: 0; padding: 10px; width: 10%; margin-right: .5%; }
+      form button { width: 8%; background: rgb(130, 224, 255); border: none; padding: 10px; }
+      #messages { list-style-type: none; margin: 0; padding: 0; }
+      #messages li { padding: 5px 10px; }
+      #messages li:nth-child(odd) { background: #eee; }
+      #messages li.bold { font-weight: 600; }
+    </style>
+    <script src="socket.io/socket.io.js"></script>
+    <script src="jquery/dist/jquery.min.js"></script>
+    <link rel="stylesheet" href="simplemde/dist/simplemde.min.css">
+    <script src="simplemde/dist/simplemde.min.js"></script>
+
+    <link href="bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="bootstrap/dist/js/bootstrap.min.js"></script>
+    
+    <script>
+      $(document).ready(function(){
+        $('[data-toggle="tooltip"]').tooltip(); 
+        var simplemde = new SimpleMDE({ element: $("#editor")[0], spellChecker: false });
+
+        var socket = io();
+        var myUser;
+        var changeObjs = [];
+
+        $('body').on('click', function(e) {
+          $this = $(e.target);
+          console.log($this)
+          $('.tooltip.in').tooltip('toggle');
+          // if (!($this.hasClass('cursor'))) {
+          //   $('.tooltip.in').tooltip('toggle');
+          // } else {
+            console.log('show cursor')
+            $this.tooltip('toggle');
+            $this.siblings('.tooltip').find('.tooltip-arrow').css('border-top-color', $this.data('color'));
+            $this.siblings('.tooltip').find('.tooltip-inner').css('background-color', $this.data('color'));
+          // }
+        });
+
+        // $('body').on('click', '.cursor', function() {
+        //   // if (!$(this).hasClass('.cursor') || $(this).find('.cursor').length) {
+        //   //   $('.tooltip.in').tooltip('toggle');
+        //   //   return;
+        //   // }
+        //   $(this).tooltip('toggle');
+        //   $(this).siblings('.tooltip').find('.tooltip-arrow').css('border-top-color', $(this).data('color'));
+        //   $(this).siblings('.tooltip').find('.tooltip-inner').css('background-color', $(this).data('color'));
+        // });
+
+        simplemde.codemirror.on("change", function(instance, changeObj){
+          if (changeObj.origin == "setValue") return;
+          socket.emit('update text', simplemde.value());
+
+          changeObjs.push(changeObj)
+          var counter = 5;
+          setInterval(function() {
+            counter--;
+            if (counter === 0 && changeObjs.length != 0) {
+              socket.emit('new actions', myUser, changeObjs);
+              console.log('emitting')
+              console.log(changeObjs);
+              changeObjs = [];
+              clearInterval(counter);
+            }
+          }, 1000);   
+
+
+        });
+
+        simplemde.codemirror.on("cursorActivity", function(instance){
+          socket.emit('update cursor', simplemde.codemirror.cursorCoords());
+        });
+
+        socket.on('name', function(user){
+          myUser = user;
+          $('#name').text(user.name)
+          $('#name').css('color', user.color)
+          $('#pic').attr("src", "http://flathash.com/"+user.name)
+        });
+
+        socket.on('announce action', function(user, message){
+          $row = $('<li/>');
+          $row.addClass('list-group-item compact');
+          $row.css('color', user.color);
+          $row.css('font-weight', 600);
+          $row.append(user.name + ' ' + message);
+          $('#history-list').prepend($row);
+        });
+
+        socket.on('new actions', function(user, changeObjs){
+          console.log(changeObjs);
+          row = `<li class="list-group-item compact">~user~ ~action~</li>`;
+
+
+          // switch(changeObj.origin) {
+          //     case "+input":
+          //         row = row.replace('~action~', 'Inputted: ' + changeObj.text)
+          //         break;
+          //     case "+delete":
+          //         row = row.replace('~action~', 'Deleted: ' + changeObj.removed)
+          //         break;
+          //     case "cut":
+          //         row = row.replace('~action~', 'Cut: ' + changeObj.removed)
+          //         break;
+          //     case "paste":
+          //         row = row.replace('~action~', 'Pasted: ' + changeObj.text)
+          //         break;
+          //     default:
+          //         break;
+          // };
+          // row = row.replace('~user~', user.name)
+          // $('#history-list').prepend($(row));
+
+        });
+
+        socket.on('set text', function(editor_val){
+          simplemde.value(editor_val);
+        });
+        socket.on('update cursor', function(user){
+          // remove all existing cursors with this id
+          $(".cursor[data-socket='" + user.id + "']").remove();
+          $cursor = $(`<div href="#" data-toggle="tooltip" data-trigger="manual" />`);
+          $cursor.addClass('cursor')
+          $cursor.css('border-color', user.color)
+          $cursor.css('left', user.cursor_coords.left);
+          $cursor.css('right', user.cursor_coords.right);
+          $cursor.css('top', user.cursor_coords.top);
+          $cursor.css('bottom', user.cursor_coords.bottom);
+          $cursor.attr('data-socket', user.id);
+          $cursor.attr('data-color', user.color);
+          $cursor.attr('title', user.name);
+
+          $('#cursors').append($('<div class="cursor-container" />').append($cursor));
+          $('[data-toggle="tooltip"]').tooltip(); 
+        });
+        socket.on('delete cursor', function(user_id){
+          // remove all existing cursors with this id
+          $(".cursor[data-socket='" + user_id + "']").remove();
+        });
+      });
+    </script>
+    
+    <style>
+      #cursors {
+        /*left: -2.5px;*/
+        position: absolute;
+      }
+      .cursor {
+        width: 0;
+        position: absolute;
+        height: 20px;
+        z-index: 3;
+        border-left: 2px solid white;
+        opacity: 0.4;
+        cursor: pointer;
+      }
+      #history-container {
+        height: 100%;
+      }
+      .equal {
+        display: flex;
+        display: -webkit-flex;
+        flex-wrap: wrap;
+      }
+      #name {
+        font-weight: 600;
+      }
+      #pic.img-thumbnail {
+        padding: 1px;
+        border: none;
+        background-color: #f5f5f5;
+      }
+      .list-group-item.header  {
+        text-align: center;
+        text-align: -webkit-center;
+        background-color: #555;
+        color: white;
+        font-weight:600;
+      }   
+      .list-group-item.compact {
+        padding-top: 5px;
+        padding-bottom: 5px;
+      } 
+      .tooltip.in { 
+        opacity: 0.7; 
+      }
+      @media (min-width: 768px) {
+        .row.equal {
+          display: flex;
+          flex-wrap: wrap;
+        }
+      }      
+    </style>
+  </head>
+  <body>
+    <div id="cursors"></div>
+    <div class="container" style="padding-top: 40px;">
+      <div class="row equal">
+        <div class="col-xs-12 col-md-10">
+          <textarea id="editor"></textarea>
+        </div>
+        <hr class="col-xs-12 hidden-md hidden-lg">
+        <div class="col-xs-12 col-md-2">
+          <div class="row">
+            <div id="history-container" class="panel panel-default">
+              <div class="panel-heading" style="text-align: right; text-align: -webkit-right; padding: 0px 5px;">
+              You are <span id="name"></span><img id="pic" src="" class="img-thumbnail" width="50" height="50"></span>
+              </div>
+              <ul id="history-list" class="list-group">
+              </ul>          
+            </div>
+          </div>
+        </div>
+    </div>
+  </body>
+</html>
+    
